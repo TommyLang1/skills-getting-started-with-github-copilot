@@ -57,6 +57,13 @@ document.addEventListener("DOMContentLoaded", () => {
         a.href = `mailto:${email}`;
         a.textContent = email;
         li.appendChild(a);
+        const del = document.createElement("button");
+        del.className = "participant-delete";
+        del.type = "button";
+        del.dataset.email = email;
+        del.title = "Unregister";
+        del.textContent = "✕";
+        li.appendChild(del);
         list.appendChild(li);
       });
       participantsBlock.appendChild(participantsTitle);
@@ -131,6 +138,13 @@ document.addEventListener("DOMContentLoaded", () => {
         a.href = `mailto:${email}`;
         a.textContent = email;
         li.appendChild(a);
+        const del = document.createElement("button");
+        del.className = "participant-delete";
+        del.type = "button";
+        del.dataset.email = email;
+        del.title = "Unregister";
+        del.textContent = "✕";
+        li.appendChild(del);
         list.appendChild(li);
       });
       participantsBlock.appendChild(list);
@@ -172,24 +186,61 @@ document.addEventListener("DOMContentLoaded", () => {
 
     fetch(url, { method: "POST" })
       .then(async (res) => {
-        if (res.ok) {
-          const json = await res.json();
-          showMessage(json.message || "Signed up successfully!", "success");
-
-          // Refresh activities to get updated participant list
-          return fetch("/activities")
-            .then((r) => r.json())
-            .then((data) => {
-              const activityData = data[activity];
-              if (activityData) updateParticipantsInCard(activity, activityData.participants, activityData.max_participants);
-            });
-        } else {
+        if (!res.ok) {
           const err = await res.json().catch(() => ({}));
           throw new Error(err.detail || "Signup failed");
         }
+        return res.json();
+      })
+      .then((json) => {
+        showMessage(json.message || "Signed up successfully!", "success");
+
+        // Refresh activities to get updated participant list
+        return fetch("/activities")
+          .then((r) => r.json())
+          .then((data) => {
+            const activityData = data[activity];
+            if (activityData) updateParticipantsInCard(activity, activityData.participants, activityData.max_participants);
+          });
       })
       .catch((err) => {
         showMessage(err.message || "Signup failed", "error");
+        console.error(err);
+      });
+  });
+
+  // Delegate click on delete buttons to unregister participants
+  activitiesListEl.addEventListener("click", (ev) => {
+    const btn = ev.target.closest && ev.target.closest(".participant-delete");
+    if (!btn) return;
+
+    const email = btn.dataset.email;
+    const card = btn.closest(".activity-card");
+    const activity = card && card.dataset.activityName;
+    if (!activity || !email) return;
+
+    if (!confirm(`Unregister ${email} from ${activity}?`)) return;
+
+    fetch(`/activities/${encodeURIComponent(activity)}/participants?email=${encodeURIComponent(email)}`, {
+      method: "DELETE",
+    })
+      .then(async (res) => {
+        if (res.ok) {
+          const json = await res.json();
+          showMessage(json.message || "Unregistered successfully", "success");
+
+          // Refresh the activity participants
+          return fetch("/activities").then((r) => r.json()).then((data) => {
+            const activityData = data[activity];
+            if (activityData) updateParticipantsInCard(activity, activityData.participants, activityData.max_participants);
+          });
+        } else {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.detail || "Unregister failed");
+        }
+      })
+      .catch((err) => {
+        showMessage(err.message || "Unregister failed", "error");
         console.error(err);
       });
   });
